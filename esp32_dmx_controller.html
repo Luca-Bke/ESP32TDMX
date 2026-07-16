@@ -23,11 +23,17 @@
         }
         h2 { margin-top: 0; color: #4CAF50; }
         h3 { margin-bottom: 15px; color: #ddd; }
+        .hint {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 20px;
+            padding: 0 20px;
+        }
         button {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: bold;
             margin: 8px;
-            padding: 12px 20px;
+            padding: 15px 25px;
             cursor: pointer;
             border-radius: 8px;
             border: none;
@@ -35,25 +41,22 @@
             user-select: none;
             -webkit-user-select: none;
         }
-        button:active { transform: scale(0.95); }
+        button:active {
+            transform: scale(0.95);
+        }
         button:disabled, input:disabled {
             opacity: 0.3;
             cursor: not-allowed;
             transform: none !important;
         }
         
-        /* Connection Buttons */
-        .conn-buttons { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-        .btn-serial { background-color: #4CAF50; color: white; flex: 1; min-width: 200px; }
-        .btn-serial:hover:not(:disabled) { background-color: #45a049; }
+        /* Button-Styles */
+        .btn-connect { background-color: #4CAF50; color: white; width: 80%; }
+        .btn-connect:hover:not(:disabled) { background-color: #45a049; }
         
-        .btn-ble { background-color: #2196F3; color: white; flex: 1; min-width: 200px; }
-        .btn-ble:hover:not(:disabled) { background-color: #1976D2; }
-
-        .btn-disconnect { background-color: #f44336 !important; color: white; }
-        .btn-disconnect:hover:not(:disabled) { background-color: #da190b !important; }
+        .btn-disconnect { background-color: #f44336; color: white; width: 80%; }
+        .btn-disconnect:hover:not(:disabled) { background-color: #da190b; }
         
-        /* Control Buttons */
         .btn-blinder { background-color: #FF9800; color: white; width: 28%; }
         .btn-blinder:hover:not(:disabled) { background-color: #e68a00; }
         .btn-blinder-hold { background-color: #e65c00; color: white; width: 80%; margin-top: 10px; }
@@ -64,24 +67,47 @@
         .btn-strobe-hold { background-color: #ad1457; color: white; width: 80%; margin-top: 10px; }
         .btn-strobe-hold:hover:not(:disabled) { background-color: #880e4f; }
         
-        #status { font-size: 16px; margin: 20px 0; color: #aaaaaa; font-weight: bold; }
-        hr { border: 0; height: 1px; background: #444; margin: 30px 0; }
+        #status {
+            font-size: 16px;
+            margin: 20px 0;
+            color: #aaaaaa;
+            font-weight: bold;
+        }
+        hr {
+            border: 0;
+            height: 1px;
+            background: #444;
+            margin: 30px 0;
+        }
 
-        .slider-container { margin: 20px 0; text-align: left; padding: 0 10%; }
-        .slider-container label { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px; color: #ddd; }
-        input[type=range] { width: 100%; cursor: pointer; accent-color: #E91E63; }
+        /* Slider Styling */
+        .slider-container {
+            margin: 20px 0;
+            text-align: left;
+            padding: 0 10%;
+        }
+        .slider-container label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #ddd;
+        }
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #E91E63;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>DMX Web Control</h2>
+    <h2>DMX Serial Control</h2>
+    <div class="hint">Wähle den USB-Port oder den gekoppelten Bluetooth-COM-Port aus.</div>
     
-    <div class="conn-buttons">
-        <button id="connectSerialBtn" class="btn-serial">🔌 Serial verbinden</button>
-        <button id="connectBleBtn" class="btn-ble">🦷 Bluetooth verbinden</button>
-    </div>
-    <div id="status">Keine Verbindung</div>
+    <button id="connectBtn" class="btn-connect">🔌 USB / Bluetooth verbinden</button>
+    <div id="status">Status: Nicht verbunden</div>
     
     <hr>
     
@@ -106,141 +132,179 @@
     </div>
 
     <div class="slider-container" style="margin-top: 30px;">
-        <label for="tOnSlider"><span>Strobe ON-Zeit:</span><span id="tOnDisplay">20 ms</span></label>
+        <label for="tOnSlider">
+            <span>Strobe ON-Zeit:</span>
+            <span id="tOnDisplay">20 ms</span>
+        </label>
         <input type="range" id="tOnSlider" min="5" max="300" value="20" disabled>
     </div>
     
     <div class="slider-container">
-        <label for="tOffSlider"><span>Strobe OFF-Zeit:</span><span id="tOffDisplay">80 ms</span></label>
+        <label for="tOffSlider">
+            <span>Strobe OFF-Zeit:</span>
+            <span id="tOffDisplay">80 ms</span>
+        </label>
         <input type="range" id="tOffSlider" min="10" max="1000" value="80" disabled>
     </div>
 </div>
 
 <script>
-    // --- STATUS VERWALTUNG ---
-    let serialPort = null;
-    let serialWriter = null;
-    
-    let bleDevice = null;
-    let bleCharacteristic = null;
+    let port;
+    let writer;
 
-    // Nordic UART Service UUIDs
-    const bleServiceUUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-    const bleRxCharUUID  = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
-
-    const connectSerialBtn = document.getElementById('connectSerialBtn');
-    const connectBleBtn = document.getElementById('connectBleBtn');
+    const connectBtn = document.getElementById('connectBtn');
     const statusDiv = document.getElementById('status');
     
+    // Alle steuerbaren UI-Elemente
     const interactiveElements = [
         document.getElementById('bOnBtn'), document.getElementById('bOffBtn'), document.getElementById('bHoldBtn'),
         document.getElementById('sOnBtn'), document.getElementById('sOffBtn'), document.getElementById('sHoldBtn'),
         document.getElementById('tOnSlider'), document.getElementById('tOffSlider')
     ];
 
-    function updateStatus() {
-        let active = false;
-        let text = [];
-        if (serialWriter) { text.push("<span style='color:#4CAF50'>USB aktiv</span>"); active = true; }
-        if (bleCharacteristic) { text.push("<span style='color:#2196F3'>BLE aktiv</span>"); active = true; }
-        
-        statusDiv.innerHTML = active ? text.join(" | ") : "Keine Verbindung";
-        interactiveElements.forEach(el => el.disabled = !active);
-    }
-
-    // --- USB SERIAL LOGIK ---
-    connectSerialBtn.addEventListener('click', async () => {
-        if (serialPort) { await disconnectSerial(); return; }
-        try {
-            serialPort = await navigator.serial.requestPort();
-            await serialPort.open({ baudRate: 115200 });
-            const textEncoder = new TextEncoderStream();
-            textEncoder.readable.pipeTo(serialPort.writable);
-            serialWriter = textEncoder.writable.getWriter();
-            connectSerialBtn.innerText = "✖ Serial trennen";
-            connectSerialBtn.classList.add("btn-disconnect");
-            updateStatus();
-        } catch (error) { console.error("Serial Fehler:", error); }
+    // --- VERBINDUNGSAUFBAU ---
+    connectBtn.addEventListener('click', async () => {
+        if (port) {
+            await disconnectSerial();
+            return;
+        }
+        await connectSerial();
     });
+
+    async function connectSerial() {
+        try {
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 115200 });
+
+            const textEncoder = new TextEncoderStream();
+            const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
+            writer = textEncoder.writable.getWriter();
+
+            statusDiv.innerHTML = "Status: <span style='color: #4CAF50;'>Verbunden</span>";
+            connectBtn.innerText = "✖ Verbindung trennen";
+            connectBtn.className = "btn-disconnect";
+            
+            // Buttons und Slider aktivieren
+            interactiveElements.forEach(el => el.disabled = false);
+        } catch (error) {
+            console.error("Fehler bei der Verbindung:", error);
+            statusDiv.innerHTML = "Status: <span style='color: #f44336;'>Verbindung fehlgeschlagen</span>";
+        }
+    }
 
     async function disconnectSerial() {
-        if (serialWriter) { serialWriter.releaseLock(); serialWriter = null; }
-        if (serialPort) { await serialPort.close(); serialPort = null; }
-        connectSerialBtn.innerText = "🔌 Serial verbinden";
-        connectSerialBtn.classList.remove("btn-disconnect");
-        updateStatus();
-    }
-
-    // --- WEB BLUETOOTH LOGIK ---
-    connectBleBtn.addEventListener('click', async () => {
-        if (bleDevice && bleDevice.gatt.connected) { await disconnectBLE(); return; }
         try {
-            bleDevice = await navigator.bluetooth.requestDevice({
-                filters: [{ namePrefix: 'ESP32_DMX' }],
-                optionalServices: [bleServiceUUID]
-            });
-            bleDevice.addEventListener('gattserverdisconnected', disconnectBLE);
+            if (writer) {
+                writer.releaseLock();
+            }
+            if (port) {
+                await port.close();
+                port = null;
+            }
+            statusDiv.innerHTML = "Status: Nicht verbunden";
+            connectBtn.innerText = "🔌 USB / Bluetooth verbinden";
+            connectBtn.className = "btn-connect";
             
-            const server = await bleDevice.gatt.connect();
-            const service = await server.getPrimaryService(bleServiceUUID);
-            bleCharacteristic = await service.getCharacteristic(bleRxCharUUID);
-            
-            connectBleBtn.innerText = "✖ Bluetooth trennen";
-            connectBleBtn.classList.add("btn-disconnect");
-            updateStatus();
-        } catch (error) { console.error("BLE Fehler:", error); }
-    });
-
-    async function disconnectBLE() {
-        if (bleDevice && bleDevice.gatt.connected) { bleDevice.gatt.disconnect(); }
-        bleCharacteristic = null;
-        connectBleBtn.innerText = "🦷 Bluetooth verbinden";
-        connectBleBtn.classList.remove("btn-disconnect");
-        updateStatus();
+            // Buttons und Slider deaktivieren
+            interactiveElements.forEach(el => el.disabled = true);
+        } catch (error) {
+            console.error("Fehler beim Trennen:", error);
+        }
     }
 
-    // --- BEFEHLE SENDEN (AN BEIDE SCHNITTSTELLEN) ---
     async function sendCommand(cmd) {
-        const fullCmd = cmd + '\n';
-        if (serialWriter) {
-            await serialWriter.write(fullCmd);
+        if (writer) {
+            await writer.write(cmd + '\n');
+            console.log("Gesendet:", cmd);
         }
-        if (bleCharacteristic) {
-            const encoder = new TextEncoder();
-            await bleCharacteristic.writeValue(encoder.encode(fullCmd));
-        }
-        console.log("Gesendet:", cmd);
     }
 
-    // --- BUTTON EVENT LISTENERS (Unverändert) ---
+    // --- NORMALE AN/AUS BUTTONS ---
     document.getElementById('bOnBtn').addEventListener('click', () => sendCommand('B_ON'));
     document.getElementById('bOffBtn').addEventListener('click', () => sendCommand('B_OFF'));
     document.getElementById('sOnBtn').addEventListener('click', () => sendCommand('S_ON'));
     document.getElementById('sOffBtn').addEventListener('click', () => sendCommand('S_OFF'));
 
+
+    // --- HOLD BUTTONS (Sicher gegen Hover-Fehltrigger durch Status-Tracking) ---
     const preventContext = (e) => e.preventDefault();
     const bHoldBtn = document.getElementById('bHoldBtn');
     const sHoldBtn = document.getElementById('sHoldBtn');
 
-    let isBlinderHeld = false, isStrobeHeld = false;
+    let isBlinderHeld = false;
+    let isStrobeHeld = false;
 
+    // --- Blinder Hold Logik ---
     bHoldBtn.addEventListener('contextmenu', preventContext);
-    const blinderPress = (e) => { if(e) e.preventDefault(); if(!isBlinderHeld){ isBlinderHeld=true; sendCommand('B_ON'); }};
-    const blinderRelease = (e) => { if(e) e.preventDefault(); if(isBlinderHeld){ isBlinderHeld=false; sendCommand('B_OFF'); }};
-    ['mousedown', 'touchstart'].forEach(evt => bHoldBtn.addEventListener(evt, blinderPress));
-    ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => bHoldBtn.addEventListener(evt, blinderRelease));
+    
+    const blinderPress = (e) => {
+        if (e) e.preventDefault();
+        if (!isBlinderHeld) {
+            isBlinderHeld = true;
+            sendCommand('B_ON');
+        }
+    };
+    
+    const blinderRelease = (e) => {
+        if (e) e.preventDefault();
+        if (isBlinderHeld) {
+            isBlinderHeld = false;
+            sendCommand('B_OFF');
+        }
+    };
 
+    bHoldBtn.addEventListener('mousedown', blinderPress);
+    bHoldBtn.addEventListener('touchstart', blinderPress);
+    
+    bHoldBtn.addEventListener('mouseup', blinderRelease);
+    bHoldBtn.addEventListener('mouseleave', blinderRelease);
+    bHoldBtn.addEventListener('touchend', blinderRelease);
+    bHoldBtn.addEventListener('touchcancel', blinderRelease);
+
+
+    // --- Strobe Hold Logik ---
     sHoldBtn.addEventListener('contextmenu', preventContext);
-    const strobePress = (e) => { if(e) e.preventDefault(); if(!isStrobeHeld){ isStrobeHeld=true; sendCommand('S_ON'); }};
-    const strobeRelease = (e) => { if(e) e.preventDefault(); if(isStrobeHeld){ isStrobeHeld=false; sendCommand('S_OFF'); }};
-    ['mousedown', 'touchstart'].forEach(evt => sHoldBtn.addEventListener(evt, strobePress));
-    ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => sHoldBtn.addEventListener(evt, strobeRelease));
+    
+    const strobePress = (e) => {
+        if (e) e.preventDefault();
+        if (!isStrobeHeld) {
+            isStrobeHeld = true;
+            sendCommand('S_ON');
+        }
+    };
+    
+    const strobeRelease = (e) => {
+        if (e) e.preventDefault();
+        if (isStrobeHeld) {
+            isStrobeHeld = false;
+            sendCommand('S_OFF');
+        }
+    };
 
-    const tOnSlider = document.getElementById('tOnSlider'), tOnDisplay = document.getElementById('tOnDisplay');
-    const tOffSlider = document.getElementById('tOffSlider'), tOffDisplay = document.getElementById('tOffDisplay');
+    sHoldBtn.addEventListener('mousedown', strobePress);
+    sHoldBtn.addEventListener('touchstart', strobePress);
+    
+    sHoldBtn.addEventListener('mouseup', strobeRelease);
+    sHoldBtn.addEventListener('mouseleave', strobeRelease);
+    sHoldBtn.addEventListener('touchend', strobeRelease);
+    sHoldBtn.addEventListener('touchcancel', strobeRelease);
 
-    tOnSlider.addEventListener('input', () => { tOnDisplay.innerText = tOnSlider.value + " ms"; sendCommand('T_ON:' + tOnSlider.value); });
-    tOffSlider.addEventListener('input', () => { tOffDisplay.innerText = tOffSlider.value + " ms"; sendCommand('T_OFF:' + tOffSlider.value); });
+
+    // --- SLIDER (Regler für Strobe-Zeiten) ---
+    const tOnSlider = document.getElementById('tOnSlider');
+    const tOnDisplay = document.getElementById('tOnDisplay');
+    const tOffSlider = document.getElementById('tOffSlider');
+    const tOffDisplay = document.getElementById('tOffDisplay');
+
+    tOnSlider.addEventListener('input', () => {
+        tOnDisplay.innerText = tOnSlider.value + " ms";
+        sendCommand('T_ON:' + tOnSlider.value);
+    });
+
+    tOffSlider.addEventListener('input', () => {
+        tOffDisplay.innerText = tOffSlider.value + " ms";
+        sendCommand('T_OFF:' + tOffSlider.value);
+    });
 
 </script>
 </body>
