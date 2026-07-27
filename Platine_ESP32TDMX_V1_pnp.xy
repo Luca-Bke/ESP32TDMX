@@ -1,0 +1,19 @@
+# Pick And Place List
+# eMail=
+#
+# Project=Platine_ESP32TDMX_V1
+# Date=17:16:49
+# CreatedBy=Fritzing 1.0.7.2026-04-14.CD-2576-0-394a8bb4
+#
+# Coordinates in mils, always center of component
+# Origin 0/0=Lower left corner of PCB. Rotation in degree (0-360, math. pos.)
+RefDes,Description,Package,X,Y,Rotation,Side,Mount
+Description: resistance;capacitance;inductance;voltage;current;power;mpn;mn;
+Via5,";;;;;;;;","",251.996,1038.73,0,Top,MANUAL
+Via4,";;;;;;;;","",299.996,1182.73,0,Top,MANUAL
+Via3,";;;;;;;;","",123.407,2030.16,0,Top,MANUAL
+ESP32,";;;;;;;;","",998.706,1622.06,90,Top,MANUAL
+MAX485,";;;;;;;;","THT",1034.6,480.279,0,Top,THT
+DMX,";;;;;;;;","THT",2363.14,435.5,0,Top,THT
+POWER,";;;;;;;;","THT",2363.14,1135.5,0,Top,THT
+BUCK CONVERTER 5V,";;;;;;;;","THT",2302.71,1830.37,-90,Top,THT
